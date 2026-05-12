@@ -40,6 +40,10 @@ function LogEvent(name as string) as object
 end function
 
 function _hashName(name as String) as String
+    return _hashNameSHA256(name)
+end function
+
+function _hashNameSHA256(name as String) as String
     ba1 = CreateObject("roByteArray")
     ba1.FromAsciiString(name)
     digest = CreateObject("roEVPDigest")
@@ -53,11 +57,85 @@ function _hashName(name as String) as String
     return ba2.ToBase64String()
 end function
 
+function _hashNameDJB2(name as String) as String
+    ba = CreateObject("roByteArray")
+    ba.FromAsciiString(name)
+
+    hash = 0.0
+    mod32 = 4294967296.0
+    for each b in ba
+        hash = (hash * 31.0 + b) mod mod32
+    end for
+
+    return _unsignedNumberToDecimalString(hash)
+end function
+
+function _unsignedNumberToDecimalString(value as dynamic) as String
+    if value = invalid then
+        return "0"
+    end if
+
+    remaining = value
+    if remaining <= 0 then
+        return "0"
+    end if
+
+    result = ""
+    while remaining > 0
+        digit = Int(remaining mod 10)
+        result = Chr(48 + digit) + result
+        remaining = Int(remaining / 10)
+    end while
+
+    return result
+end function
+
+function _normalizeHashUsed(hashUsed as dynamic) as String
+    if type(hashUsed) <> "String" then
+        return "sha256"
+    end if
+
+    lowered = LCase(hashUsed)
+    if lowered = "none" or lowered = "djb2" or lowered = "sha256" then
+        return lowered
+    end if
+
+    return "sha256"
+end function
+
+function _hashNameByAlgorithm(name as String, hashUsed as dynamic) as String
+    normalized = _normalizeHashUsed(hashUsed)
+    if normalized = "none" then
+        return name
+    else if normalized = "djb2" then
+        return _hashNameDJB2(name)
+    end if
+
+    return _hashNameSHA256(name)
+end function
+
+function _lookupByName(values as dynamic, name as String, hashUsed as dynamic) as dynamic
+    if type(values) <> "roAssociativeArray" then
+        return invalid
+    end if
+
+    value = values.Lookup(name)
+    if value <> invalid then
+        return value
+    end if
+
+    hashedName = _hashNameByAlgorithm(name, hashUsed)
+    if hashedName = name then
+        return invalid
+    end if
+
+    return values.Lookup(hashedName)
+end function
+
 function StatsigStore(logger as Object) as object
     this = {
         "checkGate": function(gateName as string) as boolean
-            gateHash = _hashName(gateName)
-            gate = m._values.feature_gates.Lookup(gateHash)
+            gate = _lookupByName(m._values.feature_gates, gateName, m._values["hash_used"])
             
             if (gate = invalid) then
                 gate = {value: false, rule_id: "", secondary_exposures: []}
@@ -68,8 +146,7 @@ function StatsigStore(logger as Object) as object
         end function
 
         "getConfig": function(configName as string) as object
-            configHash = _hashName(configName)
-            config = m._values.dynamic_configs.Lookup(configHash)
+            config = _lookupByName(m._values.dynamic_configs, configName, m._values["hash_used"])
             if (config <> invalid) then
                 dc = DynamicConfig(configName, config.value, config["rule_id"])
                 dc._secondaryExposures = config.secondary_exposures
@@ -86,11 +163,7 @@ function StatsigStore(logger as Object) as object
         end function
 
         "getLayerParameter": function(layerName as string, parameterName as string, defaultValue as dynamic) as dynamic
-            layerHash = _hashName(layerName)
-            layer = m._values.layer_configs.Lookup(layerName)
-            if (layer = invalid) then
-                layer = m._values.layer_configs.Lookup(layerHash)
-            end if
+            layer = _lookupByName(m._values.layer_configs, layerName, m._values["hash_used"])
             allocatedExperiment = ""
             isExplicitParameter = false
             secondaryExposures = []
@@ -139,11 +212,7 @@ function StatsigStore(logger as Object) as object
         end function
 
         "getParameterStore": function(storeName as string) as object
-            storeHash = _hashName(storeName)
-            parameterStore = m._values.param_stores.Lookup(storeName)
-            if (parameterStore = invalid) then
-                parameterStore = m._values.param_stores.Lookup(storeHash)
-            end if
+            parameterStore = _lookupByName(m._values.param_stores, storeName, m._values["hash_used"])
             if (parameterStore = invalid) then
                 parameterStore = {}
             end if
@@ -157,6 +226,7 @@ function StatsigStore(logger as Object) as object
                 dynamic_configs: {}
                 layer_configs: {}
                 param_stores: {}
+                hash_used: "sha256"
             }
         end function
 
@@ -166,6 +236,7 @@ function StatsigStore(logger as Object) as object
                 dynamic_configs: {}
                 layer_configs: {}
                 param_stores: {}
+                hash_used: "sha256"
             }
 
             if data = invalid then
@@ -185,6 +256,9 @@ function StatsigStore(logger as Object) as object
             if data["param_stores"] <> invalid then
                 defaultValues["param_stores"] = data["param_stores"]
             end if
+            if type(data["hash_used"]) = "String" then
+                defaultValues["hash_used"] = _normalizeHashUsed(data["hash_used"])
+            end if
 
             m._values = defaultValues
         end function
@@ -194,6 +268,7 @@ function StatsigStore(logger as Object) as object
             dynamic_configs: {}
             layer_configs: {}
             param_stores: {}
+            hash_used: "sha256"
         }
 
         _logger: logger

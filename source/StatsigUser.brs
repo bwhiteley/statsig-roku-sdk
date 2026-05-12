@@ -40,6 +40,21 @@ function StatsigUser() as object
             m._attributes["customIDs"] = ids
         end function
 
+        "setStatsigEnvironment": function(environment as object) as void
+            m._attributes["statsigEnvironment"] = environment
+        end function
+
+        "setEnvironmentTier": function(tier as String) as void
+            m.setEnvironmentParameter("tier", tier)
+        end function
+
+        "setEnvironmentParameter": function(key as String, value as String) as void
+            if type(m._attributes["statsigEnvironment"]) <> "roAssociativeArray" then
+                m._attributes["statsigEnvironment"] = {}
+            end if
+            m._attributes["statsigEnvironment"][key] = value
+        end function
+
         "toLogDictionary": function() as object
             attrs = {}
 
@@ -71,6 +86,7 @@ function StatsigUser() as object
             "custom": invalid
             "privateAttributes": invalid
             "customIDs": invalid
+            "statsigEnvironment": invalid
         }
     }
 end function

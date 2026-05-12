@@ -18,3 +18,14 @@ title = homepageStore.getString("title", "Welcome")
 showUpsell = homepageStore.getBoolean("upsell_upgrade_now", false)
 maxTiles = homepageStore.getNumber("max_tiles", 6)
 ```
+
+## Environment Targeting
+
+You can pass Statsig environment values on the user for environment-based targeting.
+
+```brightscript
+user = StatsigUser()
+user.setUserID("user-123")
+user.setEnvironmentTier("staging")
+' or: user.setEnvironmentParameter("tier", "staging")
+```
