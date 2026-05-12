@@ -90,8 +90,13 @@ function _unsignedNumberToDecimalString(value as dynamic) as String
     return result
 end function
 
+function _isStringType(value as dynamic) as boolean
+    valueType = type(value)
+    return valueType = "String" or valueType = "roString"
+end function
+
 function _normalizeHashUsed(hashUsed as dynamic) as String
-    if type(hashUsed) <> "String" then
+    if not _isStringType(hashUsed) then
         return "sha256"
     end if
 
@@ -174,7 +179,7 @@ function StatsigStore(logger as Object) as object
                 dc._secondaryExposures = layer.secondary_exposures
                 ruleID = dc._ruleID
 
-                if type(layer["allocated_experiment_name"]) = "String" then
+                if _isStringType(layer["allocated_experiment_name"]) then
                     allocatedExperiment = layer["allocated_experiment_name"]
                 end if
                 if type(layer["explicit_parameters"]) = "roArray" then
@@ -187,7 +192,7 @@ function StatsigStore(logger as Object) as object
                 end if
                 if type(layer["parameter_rule_ids"]) = "roAssociativeArray" then
                     paramRuleID = layer["parameter_rule_ids"].Lookup(parameterName)
-                    if type(paramRuleID) = "String" then
+                    if _isStringType(paramRuleID) then
                         ruleID = paramRuleID
                     end if
                 end if
@@ -256,7 +261,7 @@ function StatsigStore(logger as Object) as object
             if data["param_stores"] <> invalid then
                 defaultValues["param_stores"] = data["param_stores"]
             end if
-            if type(data["hash_used"]) = "String" then
+            if _isStringType(data["hash_used"]) then
                 defaultValues["hash_used"] = _normalizeHashUsed(data["hash_used"])
             end if
 
