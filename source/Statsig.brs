@@ -36,6 +36,14 @@ function Statsig(task as Object)
             return m._statsig.getExperiment(experiment)
         end function
 
+        "getParameterStore": function(store as string) as object
+            if m._statsig = invalid then
+                print "statsig is not initialized"
+                return ParameterStore(store, {}, invalid)
+            end if
+            return m._statsig.getParameterStore(store)
+        end function
+
         "logEvent": function(eventName as String, value as Dynamic, metadata as object) as void
             if m._statsig = invalid then
                 print "statsig is not initialized"

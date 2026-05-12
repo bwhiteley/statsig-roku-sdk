@@ -126,7 +126,7 @@ function StatsigNetwork(sdkKey, user) as object
                 if values["feature_gates"] <> invalid and values["dynamic_configs"] <> invalid then
                     return values
                 else
-                    return {feature_gates: {}, dynamic_configs: {}}
+                    return {feature_gates: {}, dynamic_configs: {}, layer_configs: {}, param_stores: {}}
                 end if
             end if
         end function

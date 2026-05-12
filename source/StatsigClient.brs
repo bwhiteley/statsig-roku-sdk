@@ -81,24 +81,119 @@ function StatsigStore(logger as Object) as object
             return dc
         end function
 
+        "getExperiment": function(experiment as string) as object
+            return m.getConfig(experiment)
+        end function
+
+        "getLayerParameter": function(layerName as string, parameterName as string, defaultValue as dynamic) as dynamic
+            layerHash = _hashName(layerName)
+            layer = m._values.layer_configs.Lookup(layerName)
+            if (layer = invalid) then
+                layer = m._values.layer_configs.Lookup(layerHash)
+            end if
+            allocatedExperiment = ""
+            isExplicitParameter = false
+            secondaryExposures = []
+            ruleID = ""
+
+            if (layer <> invalid) then
+                dc = DynamicConfig(layerName, layer.value, layer["rule_id"])
+                dc._secondaryExposures = layer.secondary_exposures
+                ruleID = dc._ruleID
+
+                if type(layer["allocated_experiment_name"]) = "String" then
+                    allocatedExperiment = layer["allocated_experiment_name"]
+                end if
+                if type(layer["explicit_parameters"]) = "roArray" then
+                    for each explicitParam in layer["explicit_parameters"]
+                        if explicitParam = parameterName then
+                            isExplicitParameter = true
+                            exit for
+                        end if
+                    end for
+                end if
+                if type(layer["parameter_rule_ids"]) = "roAssociativeArray" then
+                    paramRuleID = layer["parameter_rule_ids"].Lookup(parameterName)
+                    if type(paramRuleID) = "String" then
+                        ruleID = paramRuleID
+                    end if
+                end if
+
+                if isExplicitParameter then
+                    if layer["secondary_exposures"] <> invalid then
+                        secondaryExposures = layer["secondary_exposures"]
+                    end if
+                else
+                    if layer["undelegated_secondary_exposures"] <> invalid then
+                        secondaryExposures = layer["undelegated_secondary_exposures"]
+                    else if layer["secondary_exposures"] <> invalid then
+                        secondaryExposures = layer["secondary_exposures"]
+                    end if
+                end if
+            else
+                dc = DynamicConfig(layerName, {}, "")
+            endif
+
+            m._logger.logLayerExposure(layerName, parameterName, ruleID, secondaryExposures, allocatedExperiment, isExplicitParameter)
+            return dc.get(parameterName, defaultValue)
+        end function
+
+        "getParameterStore": function(storeName as string) as object
+            storeHash = _hashName(storeName)
+            parameterStore = m._values.param_stores.Lookup(storeName)
+            if (parameterStore = invalid) then
+                parameterStore = m._values.param_stores.Lookup(storeHash)
+            end if
+            if (parameterStore = invalid) then
+                parameterStore = {}
+            end if
+
+            return ParameterStore(storeName, parameterStore, m)
+        end function
+
         clear: function() as void
             m._values = {
                 feature_gates: {}
                 dynamic_configs: {}
+                layer_configs: {}
+                param_stores: {}
             }
         end function
 
         save: function(data as object) as void
-            if data = invalid
+            defaultValues = {
+                feature_gates: {}
+                dynamic_configs: {}
+                layer_configs: {}
+                param_stores: {}
+            }
+
+            if data = invalid then
+                m._values = defaultValues
                 return
-            else 
-                m._values = data
             end if
+
+            if data["feature_gates"] <> invalid then
+                defaultValues["feature_gates"] = data["feature_gates"]
+            end if
+            if data["dynamic_configs"] <> invalid then
+                defaultValues["dynamic_configs"] = data["dynamic_configs"]
+            end if
+            if data["layer_configs"] <> invalid then
+                defaultValues["layer_configs"] = data["layer_configs"]
+            end if
+            if data["param_stores"] <> invalid then
+                defaultValues["param_stores"] = data["param_stores"]
+            end if
+
+            m._values = defaultValues
         end function
 
         _values: {
             feature_gates: {}
             dynamic_configs: {}
+            layer_configs: {}
+            param_stores: {}
         }
 
         _logger: logger
@@ -147,6 +242,25 @@ function StatsigLogger(task) as object
             m.log(configExposure)
         end function
 
+        "logLayerExposure": function(layer as string, parameter as string, ruleID as string, secondary as object, allocatedExperiment as string, isExplicitParameter as boolean) as void
+            layerExposure = LogEvent("statsig::layer_exposure")
+            layerExposure.setUser(m._user)
+            explicitParamAsString = "false"
+            if isExplicitParameter then
+                explicitParamAsString = "true"
+            end if
+            layerExposure.setMetadata({
+                config: layer
+                "ruleID": ruleID
+                "allocatedExperiment": allocatedExperiment
+                "parameterName": parameter
+                "isExplicitParameter": explicitParamAsString
+            })
+            layerExposure.setSecondaryExposures(secondary)
+
+            m.log(layerExposure)
+        end function
+
         "flush": function() as void
             if m._task <> invalid then
                 m._task.event = {name: "flush"}
@@ -192,7 +306,14 @@ function StatsigClient(task, user) as object
             if (m._store = invalid) then
                 return DynamicConfig(experiment, {}, "")
             end if
-            return m._store.getConfig(experiment)
+            return m._store.getExperiment(experiment)
+        end function
+
+        "getParameterStore": function(storeName as String) as object
+            if (m._store = invalid) then
+                return ParameterStore(storeName, {}, invalid)
+            end if
+            return m._store.getParameterStore(storeName)
         end function
 
         "logEvent": function(eventName as String, value as Dynamic, metadata as object) as void
