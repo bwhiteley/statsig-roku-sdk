@@ -212,12 +212,12 @@ function StatsigStore(logger as Object) as object
         end function
 
         "getParameterStore": function(storeName as string) as object
-            parameterStore = _lookupByName(m._values.param_stores, storeName, m._values["hash_used"])
-            if (parameterStore = invalid) then
-                parameterStore = {}
+            pStore = _lookupByName(m._values.param_stores, storeName, m._values["hash_used"])
+            if (pStore = invalid) then
+                pStore = {}
             end if
 
-            return ParameterStore(storeName, parameterStore, m)
+            return ParameterStore(storeName, pStore, m)
         end function
 
         clear: function() as void
