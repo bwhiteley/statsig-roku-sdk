@@ -13,7 +13,7 @@ function DynamicConfig(name as String, value as object, ruleID as string) as obj
                 return defaultValue
             endif
             res = m._value.Lookup(key)
-            if (res <> unknown) then
+            if (res <> invalid) then
                 return res
             else
                 return defaultValue
