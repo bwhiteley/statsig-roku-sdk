@@ -9,7 +9,11 @@ function LogEvent(name as string) as object
         end function
 
         "setUser": function(user as object) as void
-            m._user = user
+            if type(user) = "roAssociativeArray" and user["toLogDictionary"] <> invalid then
+                m._user = user.toLogDictionary()
+            else
+                m._user = user
+            end if
         end function
 
         "toJson": function() as object
